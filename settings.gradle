@@ -14,3 +14,5 @@ include 'LibrariesAndUtilities:ATACurriculum_RecommendationsService'
 include 'LibrariesAndUtilities:ATACurriculumTestInfrastructure'
 include 'LibrariesAndUtilities:ATAPrimeClubServiceLambda'
 include 'LibrariesAndUtilities:ATACustomerServiceLambda'
+include ':tasks:project-mastery-tasks'
+
