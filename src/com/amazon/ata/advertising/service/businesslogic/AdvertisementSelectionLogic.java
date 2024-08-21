@@ -4,9 +4,12 @@ import com.amazon.ata.advertising.service.dao.ReadableDao;
 import com.amazon.ata.advertising.service.model.AdvertisementContent;
 import com.amazon.ata.advertising.service.model.EmptyGeneratedAdvertisement;
 import com.amazon.ata.advertising.service.model.GeneratedAdvertisement;
+import com.amazon.ata.advertising.service.model.RequestContext;
+import com.amazon.ata.advertising.service.targeting.TargetingEvaluator;
 import com.amazon.ata.advertising.service.targeting.TargetingGroup;
 
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -57,18 +60,42 @@ public class AdvertisementSelectionLogic {
      */
     public GeneratedAdvertisement selectAdvertisement(String customerId, String marketplaceId) {
         GeneratedAdvertisement generatedAdvertisement = new EmptyGeneratedAdvertisement();
+
+        //Randomly select ads
+        //          that the customer is eligible for
+        //          based on TargetingGroup contents
+        //          use streams and evaluate the targeting groups -- List<TargetingGroup>>  ?
+        //Use TargetingEvaluator to filter out ads customer is ineligible for
+        //If there are no eligible ads, return EmptyGeneratedAdvertisement
+
+        SortedMap<TargetingGroup, AdvertisementContent> sortedMap;
         if (StringUtils.isEmpty(marketplaceId)) {
+            sortedMap = null;
             LOG.warn("MarketplaceId cannot be null or empty. Returning empty ad.");
         } else {
+            final TargetingEvaluator evaluator = new TargetingEvaluator(new RequestContext(customerId, marketplaceId));
+            final Comparator<TargetingGroup> comparator = Comparator.comparingDouble((TargetingGroup::getClickThroughRate))
+                    .reversed();
+            sortedMap = new TreeMap<>(comparator);
             final List<AdvertisementContent> contents = contentDao.get(marketplaceId);
 
-            if (CollectionUtils.isNotEmpty(contents)) {
-                AdvertisementContent randomAdvertisementContent = contents.get(random.nextInt(contents.size()));
-                generatedAdvertisement = new GeneratedAdvertisement(randomAdvertisementContent);
+
+            for (AdvertisementContent content : contents) {
+                final List<TargetingGroup> targetingGroups = targetingGroupDao.get(content.getContentId());
+                targetingGroups.stream()
+                        .sorted(comparator)
+                        .filter(targetingGroup -> evaluator.evaluate(targetingGroup).isTrue())
+                        .findFirst()
+                        .ifPresent(targetingGroup -> sortedMap.put(targetingGroup, content));
+
             }
 
+            if (MapUtils.isNotEmpty(sortedMap)) {
+                final TargetingGroup highestComparator = sortedMap.firstKey();
+                final AdvertisementContent renderedContent = sortedMap.get(highestComparator);
+                generatedAdvertisement = new GeneratedAdvertisement(renderedContent);
+            }
         }
-
-        return generatedAdvertisement;
+        return MapUtils.isNotEmpty(sortedMap) ? generatedAdvertisement : new EmptyGeneratedAdvertisement();
     }
 }
