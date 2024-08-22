@@ -31,6 +31,7 @@ public class TargetingEvaluator {
      */
     public TargetingPredicateResult evaluate(TargetingGroup targetingGroup) {
         Optional<List<TargetingPredicate>> targetingPredicates = Optional.of(targetingGroup.getTargetingPredicates());
+
         boolean allTruePredicates = targetingPredicates
                 .orElse(List.of())
                 .stream()
