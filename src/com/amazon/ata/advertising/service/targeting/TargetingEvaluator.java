@@ -12,7 +12,7 @@ import java.util.Optional;
  */
 public class TargetingEvaluator {
     public static final boolean IMPLEMENTED_STREAMS = true;
-    public static final boolean IMPLEMENTED_CONCURRENCY = false;
+    public static final boolean IMPLEMENTED_CONCURRENCY = true;
     private final RequestContext requestContext;
 
     /**
@@ -31,6 +31,7 @@ public class TargetingEvaluator {
      */
     public TargetingPredicateResult evaluate(TargetingGroup targetingGroup) {
         Optional<List<TargetingPredicate>> targetingPredicates = Optional.of(targetingGroup.getTargetingPredicates());
+
         boolean allTruePredicates = targetingPredicates
                 .orElse(List.of())
                 .stream()
