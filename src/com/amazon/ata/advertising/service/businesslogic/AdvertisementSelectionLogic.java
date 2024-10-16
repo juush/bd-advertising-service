@@ -61,41 +61,31 @@ public class AdvertisementSelectionLogic {
     public GeneratedAdvertisement selectAdvertisement(String customerId, String marketplaceId) {
         GeneratedAdvertisement generatedAdvertisement = new EmptyGeneratedAdvertisement();
 
-        //Randomly select ads
-        //          that the customer is eligible for
-        //          based on TargetingGroup contents
-        //          use streams and evaluate the targeting groups -- List<TargetingGroup>>  ?
-        //Use TargetingEvaluator to filter out ads customer is ineligible for
-        //If there are no eligible ads, return EmptyGeneratedAdvertisement
-
-        SortedMap<TargetingGroup, AdvertisementContent> sortedMap;
         if (StringUtils.isEmpty(marketplaceId)) {
-            sortedMap = null;
             LOG.warn("MarketplaceId cannot be null or empty. Returning empty ad.");
         } else {
-            final TargetingEvaluator evaluator = new TargetingEvaluator(new RequestContext(customerId, marketplaceId));
-            final Comparator<TargetingGroup> comparator = Comparator.comparingDouble((TargetingGroup::getClickThroughRate))
-                    .reversed();
-            sortedMap = new TreeMap<>(comparator);
+            final RequestContext requestContext = new RequestContext(customerId, marketplaceId);
+            final TargetingEvaluator targetingEvaluator = new TargetingEvaluator(requestContext);
+            final Comparator<TargetingGroup> comparator = Comparator.comparingDouble(TargetingGroup::getClickThroughRate).reversed();
             final List<AdvertisementContent> contents = contentDao.get(marketplaceId);
-
+            final SortedMap<TargetingGroup, AdvertisementContent> contentsTree = new TreeMap<>(comparator);
 
             for (AdvertisementContent content : contents) {
-                final List<TargetingGroup> targetingGroups = targetingGroupDao.get(content.getContentId());
+                List<TargetingGroup> targetingGroups = targetingGroupDao.get(content.getContentId());
                 targetingGroups.stream()
                         .sorted(comparator)
-                        .filter(targetingGroup -> evaluator.evaluate(targetingGroup).isTrue())
+                        .filter(targetingGroup -> targetingEvaluator.evaluate(targetingGroup).isTrue())
                         .findFirst()
-                        .ifPresent(targetingGroup -> sortedMap.put(targetingGroup, content));
-
+                        .ifPresent(targetingGroup -> contentsTree.put(targetingGroup, content));
             }
 
-            if (MapUtils.isNotEmpty(sortedMap)) {
-                final TargetingGroup highestComparator = sortedMap.firstKey();
-                final AdvertisementContent renderedContent = sortedMap.get(highestComparator);
-                generatedAdvertisement = new GeneratedAdvertisement(renderedContent);
+            if (MapUtils.isNotEmpty(contentsTree)) {
+                final TargetingGroup firstKey = contentsTree.firstKey();
+                final AdvertisementContent firstAdContent = contentsTree.get(firstKey);
+                generatedAdvertisement = new GeneratedAdvertisement(firstAdContent);
             }
         }
-        return MapUtils.isNotEmpty(sortedMap) ? generatedAdvertisement : new EmptyGeneratedAdvertisement();
+
+        return generatedAdvertisement;
     }
 }
