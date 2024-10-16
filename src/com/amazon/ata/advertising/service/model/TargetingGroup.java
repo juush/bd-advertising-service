@@ -59,7 +59,8 @@ public class TargetingGroup {
     public static final class Builder {
         private String targetingGroupId;
         private String contentId;
-        private double clickThroughRate;
+        private double
+                clickThroughRate;
         private List<TargetingPredicate> targetingPredicates;
 
         private Builder() {

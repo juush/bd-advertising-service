@@ -5,7 +5,11 @@ import com.amazon.ata.advertising.service.targeting.predicate.TargetingPredicate
 import com.amazon.ata.advertising.service.targeting.predicate.TargetingPredicateResult;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.Stream;
 
 /**
  * Evaluates TargetingPredicates for a given RequestContext.
@@ -14,7 +18,7 @@ public class TargetingEvaluator {
     public static final boolean IMPLEMENTED_STREAMS = true;
     public static final boolean IMPLEMENTED_CONCURRENCY = true;
     private final RequestContext requestContext;
-
+    private boolean allTruePredicates = true;
     /**
      * Creates an evaluator for targeting predicates.
      * @param requestContext Context that can be used to evaluate the predicates.
@@ -30,13 +34,28 @@ public class TargetingEvaluator {
      * @return TRUE if all of the TargetingPredicates evaluate to TRUE against the RequestContext, FALSE otherwise.
      */
     public TargetingPredicateResult evaluate(TargetingGroup targetingGroup) {
-        Optional<List<TargetingPredicate>> targetingPredicates = Optional.of(targetingGroup.getTargetingPredicates());
+        ExecutorService executor = Executors.newCachedThreadPool();
 
-        boolean allTruePredicates = targetingPredicates
-                .orElse(List.of())
-                .stream()
-                .map(predicate -> predicate.evaluate(requestContext))
-                .allMatch(TargetingPredicateResult::isTrue);
-        return allTruePredicates ? TargetingPredicateResult.TRUE : TargetingPredicateResult.FALSE;
+        List<TargetingPredicate> targetingPredicates = targetingGroup.getTargetingPredicates();
+        Stream<TargetingPredicate> targetingPredicateStream = targetingPredicates.stream();
+
+        targetingPredicateStream.forEach((predicate) -> {
+            executor.submit(Objects.requireNonNull(evalPredicate(predicate)));
+        });
+
+        return allTruePredicates ? TargetingPredicateResult.TRUE :
+                TargetingPredicateResult.FALSE;
+    }
+
+    private Runnable evalPredicate(TargetingPredicate predicate) {
+        TargetingPredicateResult predicateResult = predicate.evaluate(requestContext);
+        if (!predicateResult.isTrue()) {
+            strikeFalsePredicates();
+        }
+        return null;
+    }
+
+    private void strikeFalsePredicates() {
+        allTruePredicates = false;
     }
 }
